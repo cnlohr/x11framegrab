@@ -82,13 +82,22 @@ int main( int argc, char ** argv )
 	char c;
 	const char * outformat = "ppm";
 	const char * outfile = 0;
-
+	int rescale = 0;
 	outputf = stdout;
 
-	while( (c = getopt( argc, argv, "q:o:f:h?" )) != -1 )
+	while( (c = getopt( argc, argv, "s:q:o:f:h?" )) != -1 )
 	{
 		switch( c )
 		{
+		case 's':
+			if( optarg )
+			{
+				rescale = atoi( optarg );
+			}
+			else
+			{
+				rescale = 1;
+			}
 		case 'q':
 			if( optarg )
 			{
@@ -119,6 +128,7 @@ int main( int argc, char ** argv )
 		for( i = 0; i < output_format_count; i++ )
 			fprintf( stderr, "%s%c", output_formats[i], ((i+1)!=output_format_count)?',':'\n' );
 		fprintf( stderr, "  -q [quality, if applicable, 1 = bad, 2 = ok, 3 = good]\n" );
+		fprintf( stderr, "  -s [rescale quantity, # of times to divide by 2]\n" );
 		return -5;
 	}
 	if( CapScreen() )
@@ -141,6 +151,40 @@ int main( int argc, char ** argv )
 		fprintf( stderr, "Error: Could not open file \"%s\" for writing.\n", outfile );
 		return -8;
 	}
+
+	int newwidth = width;
+	int newheight = height;
+	while( rescale > 0 )
+	{
+		newwidth = (width+1) / 2;
+		newheight = (height+1) / 2;
+		uint8_t * newbuffer = malloc( newwidth * newheight * 3 );
+		int x, y;
+		for( y = 0; y < newheight; y++ )
+		{
+			for( x = 0; x < newwidth; x++ )
+			{
+				int comp, val;
+				for( comp = 0; comp < 3; comp++ )
+				{
+					val = 0;
+					val += buffer[((y*2+0)*width+(x*2+0))*3+comp];
+					val += buffer[((y*2+0)*width+(x*2+1))*3+comp];
+					val += buffer[((y*2+1)*width+(x*2+0))*3+comp];
+					val += buffer[((y*2+1)*width+(x*2+1))*3+comp];
+					val = (val+2)>>2; //Prevent darkening bias.
+					newbuffer[(x+y*newwidth)*3+comp] = val;
+				}
+			}
+		}
+
+		width = newwidth;
+		height = newheight;
+		free( buffer );
+		buffer = newbuffer;
+		rescale--;
+	}
+
 
 	for( i = 0; i < output_format_count; i++ )
 	{
